@@ -1,0 +1,233 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// Enums
+// ============================================================
+
+enum Plan {
+  FREE
+  PRO
+  ENTERPRISE
+}
+
+enum MemberRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+enum SkillStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum SourceType {
+  PDF
+  URL
+  TEXT
+  AUDIO
+}
+
+enum ProcessStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+// ============================================================
+// Auth Models (NextAuth v5 compatible)
+// ============================================================
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  plan          Plan      @default(FREE)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts   Account[]
+  sessions   Session[]
+  workspaces WorkspaceMember[]
+
+  @@map("users")
+}
+
+model Account {
+  provider          String
+  providerAccountId String
+  type              String
+  access_token      String? @db.Text
+  refresh_token     String? @db.Text
+  id_token          String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  userId            String
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String
+  expires    DateTime
+
+  @@id([identifier, token])
+  @@map("verification_tokens")
+}
+
+// ============================================================
+// Workspace (Multi-tenant core)
+// ============================================================
+
+model Workspace {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  plan      Plan     @default(FREE)
+  logoUrl   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  members WorkspaceMember[]
+  skills  Skill[]
+  sources SourceMaterial[]
+
+  @@map("workspaces")
+}
+
+model WorkspaceMember {
+  userId      String
+  workspaceId String
+  role        MemberRole @default(MEMBER)
+  joinedAt    DateTime   @default(now())
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@id([userId, workspaceId])
+  @@map("workspace_members")
+}
+
+// ============================================================
+// Skill (Core Entity)
+// ============================================================
+
+model Skill {
+  id           String      @id @default(cuid())
+  name         String
+  description  String?     @db.Text
+  systemPrompt String      @db.LongText
+  examples     Json?
+  metadata     Json?
+  status       SkillStatus @default(DRAFT)
+  version      Int         @default(1)
+  isPublic     Boolean     @default(false)
+  workspaceId  String
+  createdById  String
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  versions  SkillVersion[]
+  jobs      RefinementJob[]
+
+  @@index([workspaceId])
+  @@index([status])
+  @@map("skills")
+}
+
+model SkillVersion {
+  id           String   @id @default(cuid())
+  skillId      String
+  version      Int
+  systemPrompt String   @db.LongText
+  examples     Json?
+  changeNote   String?  @db.Text
+  createdById  String
+  createdAt    DateTime @default(now())
+
+  skill Skill @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@unique([skillId, version])
+  @@index([skillId])
+  @@map("skill_versions")
+}
+
+// ============================================================
+// Source Material (Raw input for refinement)
+// ============================================================
+
+model SourceMaterial {
+  id          String        @id @default(cuid())
+  type        SourceType
+  title       String?
+  content     String?       @db.LongText
+  fileUrl     String?
+  fileSize    Int?
+  mimeType    String?
+  status      ProcessStatus @default(PENDING)
+  workspaceId String
+  createdById String
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  jobs      RefinementJob[]
+
+  @@index([workspaceId])
+  @@map("source_materials")
+}
+
+// ============================================================
+// Refinement Job (Async LLM processing task)
+// ============================================================
+
+model RefinementJob {
+  id          String        @id @default(cuid())
+  sourceId    String
+  skillId     String?
+  instruction String?       @db.Text
+  status      ProcessStatus @default(PENDING)
+  progress    Int           @default(0)
+  result      Json?
+  error       String?       @db.Text
+  createdById String
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  source SourceMaterial @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  skill  Skill?         @relation(fields: [skillId], references: [id])
+
+  @@index([sourceId])
+  @@index([status])
+  @@map("refinement_jobs")
+}
