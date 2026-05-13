@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { FlaskConical, LayoutDashboard, Library, LogOut, Settings, Sparkles } from "lucide-react";
+import { BookOpen, Bot, FlaskConical, Library, LogOut, Settings } from "lucide-react";
 import { signOut } from "next-auth/react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -21,10 +21,10 @@ import {
 } from "@/components/ui/sidebar";
 
 const NAV_ITEMS = [
-  { title: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { title: "Skills", href: "/skills", icon: Sparkles },
-  { title: "Sources", href: "/sources", icon: Library },
-  { title: "Settings", href: "/settings", icon: Settings },
+  { title: "角色", href: "/roles", icon: Bot },
+  { title: "知识库", href: "/knowledge", icon: BookOpen },
+  { title: "数据源", href: "/sources", icon: Library },
+  { title: "设置", href: "/settings", icon: Settings },
 ] as const;
 
 interface AppSidebarProps {

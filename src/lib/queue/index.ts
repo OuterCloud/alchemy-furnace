@@ -18,8 +18,8 @@ export interface RefineJobData {
 }
 
 export interface EmbedJobData {
-  skillId: string;
-  workspaceId: string;
+  chunkId: string; // KnowledgeChunk.id in DB
+  knowledgeBaseId: string; // KnowledgeBase.id (to look up skillId for Qdrant payload)
 }
 
 export const refineQueue = new Queue<RefineJobData>(QUEUE_NAMES.REFINE, {

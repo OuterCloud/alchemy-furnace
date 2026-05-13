@@ -2,6 +2,7 @@
  * Worker entry point — runs all BullMQ workers in a single process.
  * Start with: pnpm worker
  */
+import "./embed.worker";
 import "./refine.worker";
 
 process.on("SIGTERM", () => {

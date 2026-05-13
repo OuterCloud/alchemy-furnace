@@ -26,10 +26,21 @@ enum MemberRole {
   MEMBER
 }
 
-enum SkillStatus {
+enum RoleStatus {
   DRAFT
   PUBLISHED
   ARCHIVED
+}
+
+enum MessageRole {
+  USER
+  ASSISTANT
+}
+
+enum KnowledgeBaseType {
+  REFINEMENT
+  FILE
+  URL
 }
 
 enum SourceType {
@@ -117,9 +128,10 @@ model Workspace {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  members WorkspaceMember[]
-  skills  Skill[]
-  sources SourceMaterial[]
+  members         WorkspaceMember[]
+  roles           Role[]
+  knowledgeBases  KnowledgeBase[]
+  sources         SourceMaterial[]
 
   @@map("workspaces")
 }
@@ -138,48 +150,114 @@ model WorkspaceMember {
 }
 
 // ============================================================
-// Skill (Core Entity)
+// Role (Deployable Conversation Agent)
 // ============================================================
 
-model Skill {
-  id           String      @id @default(cuid())
+model Role {
+  id           String     @id @default(cuid())
   name         String
-  description  String?     @db.Text
-  systemPrompt String      @db.LongText
+  description  String?    @db.Text
+  systemPrompt String     @db.LongText
   examples     Json?
   metadata     Json?
-  status       SkillStatus @default(DRAFT)
-  version      Int         @default(1)
-  isPublic     Boolean     @default(false)
-  workspaceId  String
+  status            RoleStatus @default(DRAFT)
+  isPublic          Boolean    @default(false)
+  allowDataRequest  Boolean    @default(false)
+  workspaceId       String
   createdById  String
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
 
-  workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  versions  SkillVersion[]
-  jobs      RefinementJob[]
+  workspace      Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  knowledgeBases RoleKnowledgeBase[]
+  conversations  Conversation[]
+  jobs           RefinementJob[]
 
   @@index([workspaceId])
   @@index([status])
-  @@map("skills")
+  @@map("roles")
 }
 
-model SkillVersion {
-  id           String   @id @default(cuid())
-  skillId      String
-  version      Int
-  systemPrompt String   @db.LongText
-  examples     Json?
-  changeNote   String?  @db.Text
-  createdById  String
-  createdAt    DateTime @default(now())
+// ============================================================
+// Knowledge Base + Chunks (RAG — workspace-level)
+// ============================================================
 
-  skill Skill @relation(fields: [skillId], references: [id], onDelete: Cascade)
+model KnowledgeBase {
+  id          String            @id @default(cuid())
+  name        String
+  description String?           @db.Text
+  type        KnowledgeBaseType @default(REFINEMENT)
+  sourceUrl   String?
+  workspaceId String
+  createdById String
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
 
-  @@unique([skillId, version])
-  @@index([skillId])
-  @@map("skill_versions")
+  workspace Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  chunks    KnowledgeChunk[]
+  roles     RoleKnowledgeBase[]
+
+  @@index([workspaceId])
+  @@map("knowledge_bases")
+}
+
+model RoleKnowledgeBase {
+  roleId          String
+  knowledgeBaseId String
+  attachedAt      DateTime @default(now())
+
+  role          Role          @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  knowledgeBase KnowledgeBase @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, knowledgeBaseId])
+  @@map("role_knowledge_bases")
+}
+
+model KnowledgeChunk {
+  id              String   @id @default(cuid())
+  knowledgeBaseId String
+  content         String   @db.LongText
+  qdrantId        String?
+  createdAt       DateTime @default(now())
+
+  knowledgeBase KnowledgeBase @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
+
+  @@index([knowledgeBaseId])
+  @@map("knowledge_chunks")
+}
+
+// ============================================================
+// Conversation + Messages
+// ============================================================
+
+model Conversation {
+  id        String   @id @default(cuid())
+  title     String?  @db.Text
+  roleId    String
+  userId    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  role     Role      @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  messages Message[]
+
+  @@index([roleId])
+  @@index([userId])
+  @@map("conversations")
+}
+
+model Message {
+  id             String      @id @default(cuid())
+  conversationId String
+  role           MessageRole
+  content        String      @db.LongText
+  imageUrls      String?     @db.LongText
+  createdAt      DateTime    @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+  @@map("messages")
 }
 
 // ============================================================
@@ -214,7 +292,7 @@ model SourceMaterial {
 model RefinementJob {
   id          String        @id @default(cuid())
   sourceId    String
-  skillId     String?
+  roleId      String?
   instruction String?       @db.Text
   status      ProcessStatus @default(PENDING)
   progress    Int           @default(0)
@@ -225,7 +303,7 @@ model RefinementJob {
   updatedAt   DateTime      @updatedAt
 
   source SourceMaterial @relation(fields: [sourceId], references: [id], onDelete: Cascade)
-  skill  Skill?         @relation(fields: [skillId], references: [id])
+  role   Role?          @relation(fields: [roleId], references: [id])
 
   @@index([sourceId])
   @@index([status])

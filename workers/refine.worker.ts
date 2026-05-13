@@ -40,8 +40,8 @@ const worker = new Worker<RefineJobData>(
       data: { progress: 70 },
     });
 
-    // Persist the new skill
-    const skill = await db.skill.create({
+    // Persist as a new Role
+    const role = await db.role.create({
       data: {
         name: refined.name,
         description: refined.description,
@@ -53,30 +53,18 @@ const worker = new Worker<RefineJobData>(
       },
     });
 
-    // Save initial version snapshot
-    await db.skillVersion.create({
-      data: {
-        skillId: skill.id,
-        version: 1,
-        systemPrompt: refined.systemPrompt,
-        examples: refined.examples,
-        changeNote: "Initial version from source refinement",
-        createdById,
-      },
-    });
-
     // Mark job complete
     await db.refinementJob.update({
       where: { id: jobId },
       data: {
         status: "COMPLETED",
         progress: 100,
-        skillId: skill.id,
-        result: { skillId: skill.id },
+        roleId: role.id,
+        result: { roleId: role.id },
       },
     });
 
-    return { skillId: skill.id };
+    return { roleId: role.id };
   },
   { connection: redis, concurrency: 5 },
 );
