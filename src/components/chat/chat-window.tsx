@@ -219,6 +219,7 @@ export function ChatWindow({
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingContent, setStreamingContent] = useState("");
+  const [toolCallName, setToolCallName] = useState<string | null>(null);
   const [startingNew, setStartingNew] = useState(false);
   const [convList, setConvList] = useState<RoleConversation[]>(initialRoleConversations);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -290,10 +291,14 @@ export function ChatWindow({
 
           try {
             const parsed = JSON.parse(data) as
+              | { type: "tool_call"; name: string }
               | { type: "delta"; content: string }
               | { type: "done"; messageId: string };
 
-            if (parsed.type === "delta") {
+            if (parsed.type === "tool_call") {
+              setToolCallName(parsed.name);
+            } else if (parsed.type === "delta") {
+              setToolCallName(null);
               accumulated += parsed.content;
               setStreamingContent(accumulated);
             } else if (parsed.type === "done") {
@@ -316,6 +321,7 @@ export function ChatWindow({
                 ),
               );
               setStreamingContent("");
+              setToolCallName(null);
               setIsStreaming(false);
             }
           } catch {
@@ -329,6 +335,7 @@ export function ChatWindow({
       setPendingImages(imagesToSend);
       setIsStreaming(false);
       setStreamingContent("");
+      setToolCallName(null);
     }
   }, [input, pendingImages, isStreaming, conversationId]);
 
@@ -529,7 +536,11 @@ export function ChatWindow({
           {isStreaming && (
             <div className="flex justify-start">
               <div className="max-w-[75%] rounded-2xl bg-muted px-4 py-2.5 text-sm text-foreground">
-                {streamingContent ? (
+                {toolCallName ? (
+                  <span className="animate-pulse text-muted-foreground">
+                    正在调用「{toolCallName}」…
+                  </span>
+                ) : streamingContent ? (
                   <MarkdownContent content={streamingContent} />
                 ) : (
                   <span className="animate-pulse text-muted-foreground">···</span>

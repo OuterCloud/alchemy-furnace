@@ -132,6 +132,7 @@ model Workspace {
   roles           Role[]
   knowledgeBases  KnowledgeBase[]
   sources         SourceMaterial[]
+  dataSources     DataSource[]
 
   @@map("workspaces")
 }
@@ -170,6 +171,7 @@ model Role {
 
   workspace      Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   knowledgeBases RoleKnowledgeBase[]
+  dataSources    RoleDataSource[]
   conversations  Conversation[]
   jobs           RefinementJob[]
 
@@ -283,6 +285,41 @@ model SourceMaterial {
 
   @@index([workspaceId])
   @@map("source_materials")
+}
+
+// ============================================================
+// Data Source (HTTP API tool for LLM function calling)
+// ============================================================
+
+model DataSource {
+  id          String   @id @default(cuid())
+  workspaceId String
+  name        String
+  description String?  @db.Text
+  method      String   @default("GET")
+  url         String   @db.Text
+  headers     Json?
+  paramSchema Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  roles     RoleDataSource[]
+
+  @@index([workspaceId])
+  @@map("data_sources")
+}
+
+model RoleDataSource {
+  roleId       String
+  dataSourceId String
+  order        Int    @default(0)
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  dataSource DataSource @relation(fields: [dataSourceId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, dataSourceId])
+  @@map("role_data_sources")
 }
 
 // ============================================================

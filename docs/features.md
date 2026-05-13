@@ -13,6 +13,7 @@
 4. [Roles 模块（角色）](#4-roles-模块角色)
 5. [知识库模块](#5-知识库模块)
 6. [对话模块](#6-对话模块)
+7. [数据源模块](#7-数据源模块)
 
 ---
 
@@ -527,16 +528,131 @@ KnowledgeBase（知识库）是 workspace 级独立知识存储单元：
 
 ---
 
-## 6. 数据源模块
+## 7. 数据源模块
 
-### 6.1 当前状态
+### 7.1 产品定位
 
-`/sources` 页面当前显示「敬请期待」占位。
-
-### 6.2 规划方向
+DataSource（数据源）是 workspace 级 HTTP 工具定义，角色可绑定多个数据源。对话时 LLM 通过 function calling 自主决定是否调用某个工具，服务端执行 HTTP 请求并将结果注入 LLM 上下文完成最终回复，实现数据驱动的智能对话。
 
 | 阶段 | 说明 | 状态 |
 |------|------|------|
-| 阶段 0 | LLM 主动向用户索取数据（通过 Role.allowDataRequest 系统提示词指引） | ✅ 已完成（见 3.9）|
-| 阶段 1 | 配置 HTTP 数据源，每轮对话自动注入最新快照 | 待开发 |
-| 阶段 2 | LLM function calling 按需拉取数据 | 待开发 |
+| 阶段 0 | LLM 主动向用户索取数据（通过 `Role.allowDataRequest` 系统提示词指引） | ✅ 已完成（见 3.9）|
+| 阶段 1（已完成） | 配置 HTTP 数据源，LLM function calling 按需拉取 | ✅ 已完成 |
+
+---
+
+### 7.2 数据源列表页 `/sources`
+
+**UI 逻辑（Server Component）：**
+- 查询当前 workspace 下所有 DataSource（`createdAt` 倒序）
+- 每张卡片展示：HTTP Method badge（颜色区分）+ 名称 + 描述 + URL 预览
+- 点击卡片 → 跳转 `/sources/[id]` 编辑页
+- 右上角「新建数据源」按钮 → 跳转 `/sources/new`
+- 空状态：虚线边框 + 说明文字 + CTA 按钮
+
+---
+
+### 7.3 新建数据源 `/sources/new`
+
+**UI 逻辑：**
+- Server Component 壳 + `SourceEditor`（创建模式，无 initialData）
+- 填写信息后点「创建数据源」→ `POST /api/data-sources` → 跳转 `/sources/[id]`
+
+---
+
+### 7.4 编辑数据源 `/sources/[id]`
+
+**Server Component** 获取数据源，渲染 `SourceEditor`（编辑模式）。
+
+**`SourceEditor` 组件结构（Client Component）：**
+
+```
+1. 基本信息：名称（必填）+ 描述（textarea，LLM 据此决定是否调用）
+2. 接口配置：HTTP Method select + URL 输入框 + Headers 行编辑器
+3. 参数定义：表格（参数名/类型/描述/必填），Add/Delete 行
+   - 参数名校验：/^[a-z][a-z0-9_]*$/
+   - 类型：string | number | boolean
+4. 保存按钮（创建 / 更新）
+5. 调试面板（仅编辑模式）：
+   - 根据 paramSchema 动态生成输入框
+   - 「发送请求」→ POST /api/data-sources/[id]/test { args }
+   - 展示 result 或 error（monospace 样式）
+6. 危险区域（仅编辑模式）：删除按钮 + 二次确认 Dialog
+```
+
+---
+
+### 7.5 绑定数据源到角色
+
+**触发：** 在角色编辑页 `/roles/[id]` 的「绑定的数据源」section 中点击「绑定数据源」
+
+**操作流程：**
+1. Dialog 弹出工作区内未绑定的数据源列表（含 Method badge + 名称 + 描述）
+2. 点「绑定」→ `POST /api/roles/[id]/data-sources` `{ dataSourceId }`
+3. 服务端用 `upsert` 写入 `role_data_sources` 表（幂等）
+4. 前端乐观更新已绑定列表
+
+**解绑：**
+- 点 Link2Off 图标 → `DELETE /api/roles/[id]/data-sources/[dsId]`
+- 仅删除关联记录，不删除数据源本身
+
+**空状态（无可绑定数据源）：**
+- 显示虚线边框卡片 + 说明文字 + 「数据源」模块跳转链接
+
+---
+
+### 7.6 对话中的 Function Calling 流程
+
+对话时若角色绑定了数据源（`role.dataSources.length > 0`），消息路由采用**两次 LLM 调用**策略：
+
+**第一次调用（非流式，工具决策）：**
+1. 构建 `tools` 数组：每个数据源对应一个 `function` 工具，`name = ds.id`，`parameters` 由 `buildParamSchema(paramSchema)` 转换
+2. `llm.chat.completions.create({ tools, tool_choice: "auto" })`
+3. 若 `finish_reason === "tool_calls"`：
+   - 解析 `tool_calls[0].function.name`（= dsId）和 `arguments`
+   - 发送 SSE `{ type: "tool_call", name: ds.name }` → 前端显示「正在调用「{name}」…」
+   - `callDataSource(ds, args)` 执行 HTTP 请求（GET → query string，POST/PUT/PATCH → JSON body）
+   - 超时 10s，截断 >8000 字符
+   - 将 `assistant(tool_calls) + tool(result)` 追加到 llmMessages
+
+**第二次调用（流式，最终回复）：**
+4. 携带工具结果继续流式输出
+5. 每个 token → SSE `{ type: "delta", content: "..." }`
+6. 流结束 → 写入 DB + SSE `{ type: "done" }`
+
+**注意：** MVP 阶段只处理第一个工具调用，不递归；若 LLM 不触发工具调用，直接执行第二次流式调用。
+
+---
+
+### 7.7 `callDataSource()` 行为
+
+- **GET / DELETE**：参数拼接 query string
+- **POST / PUT / PATCH**：参数作为 JSON body，自动设置 `Content-Type: application/json`
+- **自定义 Headers**：从 `DataSource.headers` 读取，覆盖请求头
+- **超时**：AbortController，10 秒
+- **截断**：响应超过 8000 字符时截断并追加 `\n...[截断]`
+
+---
+
+### 7.8 API 权限矩阵
+
+| 接口 | 方法 | 所需权限 | 说明 |
+|------|------|----------|------|
+| `/api/data-sources` | GET | 任意成员 | 列出 workspace 下所有数据源 |
+| `/api/data-sources` | POST | 任意成员 | 创建数据源（name/url 必填）|
+| `/api/data-sources/[id]` | GET | 任意成员 | 获取数据源详情 |
+| `/api/data-sources/[id]` | PUT | 任意成员 | 更新数据源 |
+| `/api/data-sources/[id]` | DELETE | 任意成员 | 删除数据源（级联删除绑定关系）|
+| `/api/data-sources/[id]/test` | POST | 任意成员 | 调试执行（`{ args }` → `{ result }` 或 `{ error }`）|
+| `/api/roles/[id]/data-sources` | POST | 任意成员 | 绑定数据源到角色（幂等 upsert）|
+| `/api/roles/[id]/data-sources/[dsId]` | DELETE | 任意成员 | 解绑数据源 |
+
+---
+
+### 7.9 关键设计决策
+
+- **工具名 = ds.id（cuid）**：cuid 格式合法作为 OpenAI function name，同时避免名称冲突
+- **描述驱动调用决策**：`description` 字段是 LLM 判断是否调用的依据，写得越准确，召回越精准
+- **非递归 MVP**：只处理第一个 tool call，不支持链式调用；满足大多数单次查询场景
+- **调试面板**：内嵌于编辑页，无需切换到专用测试环境，降低开发调试摩擦
+- **数据源与角色解耦**：同一数据源可被多个角色复用（`RoleDataSource` 多对多关联）

@@ -3,6 +3,7 @@ import type { NextRequest } from "next/server";
 import { DEFAULT_MODEL, llm } from "@/lib/ai/client";
 import { embed } from "@/lib/ai/embedder";
 import { auth } from "@/lib/auth";
+import { buildParamSchema, callDataSource } from "@/lib/data-source/caller";
 import { db } from "@/lib/db";
 import { searchChunks } from "@/lib/vector";
 
@@ -35,6 +36,9 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
           systemPrompt: true,
           allowDataRequest: true,
           knowledgeBases: { select: { knowledgeBaseId: true } },
+          dataSources: {
+            include: { dataSource: true },
+          },
         },
       },
     },
@@ -75,7 +79,6 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
   }
 
   // Fetch last 10 history messages before the USER message just saved
-  // Order desc, take 11 (includes the USER msg we just wrote), then drop it
   const recentMsgs = await db.message.findMany({
     where: { conversationId },
     orderBy: { createdAt: "desc" },
@@ -106,10 +109,10 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
       : content;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const llmMessages: Array<{ role: "system" | "user" | "assistant"; content: any }> = [
+  const llmMessages: any[] = [
     { role: "system", content: systemContent },
     ...historyWithoutLast.map((m) => ({
-      role: m.role === "USER" ? ("user" as const) : ("assistant" as const),
+      role: m.role === "USER" ? "user" : "assistant",
       content: m.content,
     })),
     { role: "user", content: userContent },
@@ -127,6 +130,68 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
       let fullContent = "";
 
       try {
+        // ── Tool calling (first pass, non-streaming) ──────────────────────────
+        const roleDataSources = conversation.role.dataSources;
+
+        if (roleDataSources.length > 0) {
+          const tools = roleDataSources.map((rds) => ({
+            type: "function" as const,
+            function: {
+              name: rds.dataSource.id,
+              description: rds.dataSource.description ?? rds.dataSource.name,
+              parameters: buildParamSchema(rds.dataSource.paramSchema),
+            },
+          }));
+
+          const decision = await llm.chat.completions.create({
+            model: DEFAULT_MODEL,
+            messages: llmMessages,
+            tools,
+            tool_choice: "auto",
+          });
+
+          const choice = decision.choices[0];
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const toolCalls = (choice?.message as any)?.tool_calls as any[] | undefined;
+          if (choice?.finish_reason === "tool_calls" && toolCalls?.length) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const toolCall = toolCalls[0] as any;
+            const dsId = toolCall.function?.name as string | undefined;
+            const rds = roleDataSources.find((r) => r.dataSource.id === dsId);
+
+            if (rds && dsId) {
+              send({ type: "tool_call", name: rds.dataSource.name });
+
+              let args: Record<string, unknown> = {};
+              try {
+                args = JSON.parse(toolCall.function.arguments as string) as Record<string, unknown>;
+              } catch {
+                // malformed args — use empty
+              }
+
+              let toolResult = "";
+              try {
+                toolResult = await callDataSource(rds.dataSource, args);
+              } catch (err) {
+                toolResult = `Error: ${err instanceof Error ? err.message : "Request failed"}`;
+              }
+
+              // Append tool exchange to messages
+              llmMessages.push({
+                role: "assistant",
+                content: null,
+                tool_calls: [toolCall],
+              });
+              llmMessages.push({
+                role: "tool",
+                content: toolResult,
+                tool_call_id: toolCall.id as string,
+              });
+            }
+          }
+        }
+
+        // ── Second pass: streaming response ──────────────────────────────────
         const completion = await llm.chat.completions.create({
           model: DEFAULT_MODEL,
           messages: llmMessages,

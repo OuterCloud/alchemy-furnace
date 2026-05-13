@@ -41,7 +41,7 @@ export default async function RoleDetailPage({ params }: { params: Promise<{ id:
   });
   if (!membership) notFound();
 
-  const [role, attachedKBs, allKBs] = await Promise.all([
+  const [role, attachedKBs, allKBs, attachedDSs, allDSs] = await Promise.all([
     db.role.findFirst({
       where: { id, workspaceId: membership.workspaceId },
     }),
@@ -58,6 +58,14 @@ export default async function RoleDetailPage({ params }: { params: Promise<{ id:
       where: { workspaceId: membership.workspaceId },
       orderBy: { createdAt: "desc" },
       include: { _count: { select: { chunks: true } } },
+    }),
+    db.roleDataSource.findMany({
+      where: { roleId: id },
+      include: { dataSource: true },
+    }),
+    db.dataSource.findMany({
+      where: { workspaceId: membership.workspaceId },
+      orderBy: { createdAt: "desc" },
     }),
   ]);
   if (!role) notFound();
@@ -91,6 +99,8 @@ export default async function RoleDetailPage({ params }: { params: Promise<{ id:
           }}
           attachedKBs={attachedKBs.map((a) => a.knowledgeBase)}
           availableKBs={allKBs}
+          attachedDSs={attachedDSs.map((a) => a.dataSource)}
+          availableDSs={allDSs}
         />
       </div>
     </div>

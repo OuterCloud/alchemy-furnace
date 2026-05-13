@@ -10,6 +10,7 @@ import {
   BookOpen,
   ChevronDown,
   ChevronUp,
+  Database,
   Eye,
   Globe,
   Link2,
@@ -63,6 +64,22 @@ interface AvailableKB {
   name: string;
   description: string | null;
   _count: { chunks: number };
+}
+
+interface AttachedDS {
+  id: string;
+  name: string;
+  description: string | null;
+  method: string;
+  url: string;
+}
+
+interface AvailableDS {
+  id: string;
+  name: string;
+  description: string | null;
+  method: string;
+  url: string;
 }
 
 // ── ChunkEditDialog ───────────────────────────────────────────────────────────
@@ -253,6 +270,123 @@ function AttachKBDialog({
   );
 }
 
+const METHOD_COLORS: Record<string, string> = {
+  GET: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
+  POST: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
+  PUT: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400",
+  PATCH: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400",
+  DELETE: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
+};
+
+// ── AttachDSDialog ────────────────────────────────────────────────────────────
+
+function AttachDSDialog({
+  roleId,
+  attachedDsIds,
+  availableDSs,
+  onAttached,
+}: {
+  roleId: string;
+  attachedDsIds: Set<string>;
+  availableDSs: AvailableDS[];
+  onAttached: (ds: AvailableDS) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [attaching, setAttaching] = useState<string | null>(null);
+
+  const unattached = availableDSs.filter((ds) => !attachedDsIds.has(ds.id));
+
+  const handleAttach = async (dsId: string) => {
+    setAttaching(dsId);
+    try {
+      const res = await fetch(`/api/roles/${roleId}/data-sources`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dataSourceId: dsId }),
+      });
+      if (!res.ok) throw new Error("绑定失败");
+      const ds = availableDSs.find((d) => d.id === dsId)!;
+      toast.success("数据源已绑定");
+      setOpen(false);
+      onAttached(ds);
+    } catch {
+      toast.error("绑定失败，请重试");
+    } finally {
+      setAttaching(null);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger render={<Button variant="outline" size="sm" />}>
+        <Plus className="h-4 w-4" />
+        绑定数据源
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>选择数据源</DialogTitle>
+          <DialogDescription>选择一个工作区数据源绑定到此角色</DialogDescription>
+        </DialogHeader>
+        {unattached.length === 0 ? (
+          <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border bg-muted/30 px-6 py-8">
+            <Database className="h-8 w-8 text-muted-foreground/40" />
+            <div className="text-center">
+              <p className="text-sm font-medium text-foreground">暂无可绑定的数据源</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                请先前往{" "}
+                <Link
+                  href="/sources"
+                  className="font-medium text-primary underline-offset-4 hover:underline"
+                >
+                  数据源
+                </Link>{" "}
+                模块新建
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {unattached.map((ds) => (
+              <div
+                key={ds.id}
+                className="flex items-center justify-between rounded-lg border border-border p-3"
+              >
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <span
+                      className={`shrink-0 rounded px-1.5 py-0.5 font-mono text-xs font-semibold ${METHOD_COLORS[ds.method] ?? "bg-muted text-muted-foreground"}`}
+                    >
+                      {ds.method}
+                    </span>
+                    <p className="truncate text-sm font-medium">{ds.name}</p>
+                  </div>
+                  {ds.description && (
+                    <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                      {ds.description}
+                    </p>
+                  )}
+                </div>
+                <Button
+                  size="sm"
+                  onClick={() => handleAttach(ds.id)}
+                  disabled={attaching === ds.id}
+                  className="ml-3 shrink-0"
+                >
+                  {attaching === ds.id ? <Loader2 className="animate-spin" /> : <Link2 />}
+                  绑定
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+        <DialogFooter>
+          <DialogClose render={<Button variant="outline" />}>关闭</DialogClose>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 interface RoleEditorProps {
   roleId: string;
   initialStatus: RoleStatus;
@@ -266,6 +400,8 @@ interface RoleEditorProps {
   };
   attachedKBs: AttachedKB[];
   availableKBs: AvailableKB[];
+  attachedDSs: AttachedDS[];
+  availableDSs: AvailableDS[];
 }
 
 export function RoleEditor({
@@ -275,6 +411,8 @@ export function RoleEditor({
   initialValues,
   attachedKBs: initialAttachedKBs,
   availableKBs,
+  attachedDSs: initialAttachedDSs,
+  availableDSs,
 }: RoleEditorProps) {
   const router = useRouter();
 
@@ -296,10 +434,14 @@ export function RoleEditor({
   const [deletingChunkId, setDeletingChunkId] = useState<string | null>(null);
   const [reembedding, setReembedding] = useState<string | null>(null);
 
+  const [attachedDSs, setAttachedDSs] = useState<AttachedDS[]>(initialAttachedDSs);
+  const [detachingDsId, setDetachingDsId] = useState<string | null>(null);
+
   const isArchived = status === "ARCHIVED";
   const isDraft = status === "DRAFT";
   const isBusy = saving || transitioning;
   const attachedKbIds = new Set(attachedKBs.map((kb) => kb.id));
+  const attachedDsIds = new Set(attachedDSs.map((ds) => ds.id));
 
   // ── Examples helpers ──────────────────────────────────────────────────────
 
@@ -438,6 +580,20 @@ export function RoleEditor({
       toast.error("删除失败，请重试");
     } finally {
       setDeletingChunkId(null);
+    }
+  };
+
+  const handleDetachDs = async (dsId: string) => {
+    setDetachingDsId(dsId);
+    try {
+      const res = await fetch(`/api/roles/${roleId}/data-sources/${dsId}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("解绑失败");
+      setAttachedDSs((prev) => prev.filter((ds) => ds.id !== dsId));
+      toast.success("已解绑数据源");
+    } catch {
+      toast.error("解绑失败，请重试");
+    } finally {
+      setDetachingDsId(null);
     }
   };
 
@@ -796,6 +952,70 @@ export function RoleEditor({
                 </div>
               );
             })}
+          </div>
+        )}
+      </div>
+
+      {/* ── Data Sources section ── */}
+      <div className="rounded-xl border border-border">
+        <div className="flex items-center justify-between px-4 py-3">
+          <div className="flex items-center gap-2">
+            <Database className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm font-medium">绑定的数据源</span>
+            <span className="text-xs text-muted-foreground">（{attachedDSs.length} 个）</span>
+          </div>
+          {!isArchived && (
+            <AttachDSDialog
+              roleId={roleId}
+              attachedDsIds={attachedDsIds}
+              availableDSs={availableDSs}
+              onAttached={(ds) => {
+                setAttachedDSs((prev) => [...prev, ds]);
+              }}
+            />
+          )}
+        </div>
+
+        {attachedDSs.length === 0 ? (
+          <div className="border-t border-border px-4 py-6 text-center text-sm text-muted-foreground">
+            尚未绑定任何数据源。绑定后 LLM 可通过 function calling 按需拉取数据。
+          </div>
+        ) : (
+          <div className="border-t border-border">
+            {attachedDSs.map((ds) => (
+              <div
+                key={ds.id}
+                className="flex items-center gap-2 border-b border-border px-4 py-3 last:border-b-0"
+              >
+                <span
+                  className={`shrink-0 rounded px-1.5 py-0.5 font-mono text-xs font-semibold ${METHOD_COLORS[ds.method] ?? "bg-muted text-muted-foreground"}`}
+                >
+                  {ds.method}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium">{ds.name}</p>
+                  {ds.description && (
+                    <p className="truncate text-xs text-muted-foreground">{ds.description}</p>
+                  )}
+                </div>
+                {!isArchived && (
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className="shrink-0 text-muted-foreground hover:text-destructive"
+                    onClick={() => handleDetachDs(ds.id)}
+                    disabled={detachingDsId === ds.id}
+                    title="解绑数据源"
+                  >
+                    {detachingDsId === ds.id ? (
+                      <Loader2 className="animate-spin" />
+                    ) : (
+                      <Link2Off className="h-4 w-4" />
+                    )}
+                  </Button>
+                )}
+              </div>
+            ))}
           </div>
         )}
       </div>
