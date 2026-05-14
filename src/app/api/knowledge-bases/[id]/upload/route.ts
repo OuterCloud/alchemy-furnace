@@ -9,9 +9,33 @@ export const runtime = "nodejs";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
-/** Split extracted PDF text into sections of ~2000 chars, max 20 sections. */
+/**
+ * Clean up raw PDF-extracted text:
+ * - Normalize line endings and collapse whitespace runs
+ * - Within each paragraph, join broken lines (PDF renders one line per text item)
+ * - Remove spaces between CJK characters (Chinese doesn't use inter-character spaces)
+ */
+function cleanPdfText(raw: string): string {
+  return raw
+    .replace(/\r\n?/g, "\n")
+    .replace(/[ \t]+/g, " ")
+    .split(/\n{2,}/)
+    .map((para) =>
+      para
+        .split("\n")
+        .map((l) => l.trim())
+        .filter(Boolean)
+        .join(" ")
+        // Remove spaces between CJK characters (lookbehind/lookahead preserves surrounding chars)
+        .replace(/(?<=[\u4e00-\u9fff\uff00-\uffef])\s+(?=[\u4e00-\u9fff\uff00-\uffef])/g, ""),
+    )
+    .filter(Boolean)
+    .join("\n\n");
+}
+
+/** Split cleaned PDF text into sections of ~2000 chars, max 20 sections. */
 function splitIntoSections(text: string): string[] {
-  const paragraphs = text
+  const paragraphs = cleanPdfText(text)
     .split(/\n{2,}/)
     .map((p) => p.trim())
     .filter(Boolean);
