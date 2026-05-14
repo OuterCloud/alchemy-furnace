@@ -1,6 +1,36 @@
 import { DEFAULT_MODEL, llm } from "@/lib/ai/client";
 
 /**
+ * Lightweight cleanup for PDF-extracted text chunks.
+ * Removes page headers/footers, fixes broken sentences, preserves all real content.
+ * Does NOT expand or summarize — output length is similar to input.
+ */
+const CLEANUP_PDF_CHUNK_PROMPT = `你是文本清洗专家，专门处理从PDF提取的原始文本。
+
+任务：将以下PDF原始文本整理为通顺、连贯的中文段落。
+
+规则：
+- 去除重复出现的页眉、页脚、章节编号等版面噪音（如"第X节第X节"这类重复）
+- 修复因PDF换行/分页导致的断字、断句，使句子语义完整
+- 完整保留所有正文内容，不增减实质信息，不总结，不扩充
+- 输出纯文本，段落间用空行分隔
+
+原始文本：
+{text}
+
+直接输出整理后的正文，不加任何说明。`;
+
+export async function cleanupPdfChunk(text: string): Promise<string> {
+  const res = await llm.chat.completions.create({
+    model: DEFAULT_MODEL,
+    messages: [{ role: "user", content: CLEANUP_PDF_CHUNK_PROMPT.replace("{text}", text) }],
+    temperature: 0.1,
+    max_tokens: 2500,
+  });
+  return res.choices[0]?.message?.content?.trim() ?? text;
+}
+
+/**
  * Expand raw user input into structured knowledge base content suitable for RAG retrieval.
  * Short hints are expanded into detailed methodology; already-detailed content is preserved.
  * Non-streaming — used when adding content to a KnowledgeBase.
