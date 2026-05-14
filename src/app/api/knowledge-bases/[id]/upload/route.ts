@@ -81,7 +81,8 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
   try {
     const result = await parser.getText({ pageJoiner: "\n\n" });
     pdfText = result.text?.trim() ?? "";
-  } catch {
+  } catch (err) {
+    console.error("[kb/upload] pdf parse error:", err);
     return Response.json({ error: "PDF 解析失败，请确认文件未加密且内容为文本" }, { status: 422 });
   } finally {
     await parser.destroy().catch(() => undefined);
