@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { formatDistanceToNow } from "date-fns";
 import { zhCN } from "date-fns/locale";
@@ -8,6 +8,7 @@ import {
   BrainCircuit,
   Eye,
   Loader2,
+  Pencil,
   RefreshCw,
   Sparkles,
   Trash2,
@@ -32,6 +33,7 @@ import { Textarea } from "@/components/ui/textarea";
 
 interface Chunk {
   id: string;
+  title: string | null;
   content: string;
   qdrantId: string | null;
   createdAt: string;
@@ -104,6 +106,7 @@ function ChunkEditDialog({
 
   const isDirty = editContent !== chunk.content;
   const isBusy = optimizing || saving;
+  const displayTitle = chunk.title ?? `知识块 ${idx + 1}`;
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -116,7 +119,7 @@ function ChunkEditDialog({
       </DialogTrigger>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>知识块 {idx + 1}</DialogTitle>
+          <DialogTitle>{displayTitle}</DialogTitle>
           <DialogDescription>
             {formatDistanceToNow(new Date(chunk.createdAt), { addSuffix: true, locale: zhCN })}
             {" · "}
@@ -178,6 +181,104 @@ function ChunkEditDialog({
     </Dialog>
   );
 }
+
+// ── InlineTitle ───────────────────────────────────────────────────────────────
+
+function InlineTitle({
+  chunk,
+  idx,
+  kbId,
+  onSaved,
+}: {
+  chunk: Chunk;
+  idx: number;
+  kbId: string;
+  onSaved: (chunkId: string, title: string | null) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [saving, setSaving] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const displayTitle = chunk.title ?? `知识块 ${idx + 1}`;
+
+  const startEdit = () => {
+    setDraft(chunk.title ?? "");
+    setEditing(true);
+    // focus after render
+    setTimeout(() => inputRef.current?.select(), 0);
+  };
+
+  const cancelEdit = () => {
+    setEditing(false);
+  };
+
+  const saveTitle = async () => {
+    const newTitle = draft.trim() || null;
+    // No change
+    if (newTitle === chunk.title) {
+      setEditing(false);
+      return;
+    }
+    setSaving(true);
+    setEditing(false);
+    const prev = chunk.title;
+    onSaved(chunk.id, newTitle); // optimistic
+    try {
+      const res = await fetch(`/api/knowledge-bases/${kbId}/chunks/${chunk.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: newTitle ?? "" }),
+      });
+      if (!res.ok) throw new Error();
+    } catch {
+      onSaved(chunk.id, prev); // revert
+      toast.error("标题保存失败");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (editing) {
+    return (
+      <input
+        ref={inputRef}
+        autoFocus
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") saveTitle();
+          if (e.key === "Escape") cancelEdit();
+        }}
+        onBlur={saveTitle}
+        placeholder={`知识块 ${idx + 1}`}
+        className="h-5 w-full rounded border border-border bg-background px-1 text-sm font-medium outline-none focus:ring-1 focus:ring-ring"
+      />
+    );
+  }
+
+  return (
+    <div className="group/title flex min-w-0 items-center gap-1">
+      {saving ? <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" /> : null}
+      <p
+        className="cursor-pointer truncate text-sm font-medium"
+        onClick={startEdit}
+        title="点击编辑标题"
+      >
+        {displayTitle}
+      </p>
+      <button
+        onClick={startEdit}
+        className="shrink-0 cursor-pointer opacity-0 transition-opacity group-hover/title:opacity-100"
+        title="编辑标题"
+      >
+        <Pencil className="h-3 w-3 text-muted-foreground" />
+      </button>
+    </div>
+  );
+}
+
+// ── KnowledgeBaseEditor ───────────────────────────────────────────────────────
 
 interface KnowledgeBaseEditorProps {
   kbId: string;
@@ -245,10 +346,16 @@ export function KnowledgeBaseEditor({
         body: JSON.stringify({ content: refineContent }),
       });
       if (!res.ok) throw new Error("炼化失败");
-      const { chunkId, content } = (await res.json()) as { chunkId: string; content: string };
+      const data = (await res.json()) as { chunkId: string; content: string; title?: string };
       setRefineContent("");
       setChunks((prev) => [
-        { id: chunkId, content, qdrantId: null, createdAt: new Date().toISOString() },
+        {
+          id: data.chunkId,
+          title: data.title ?? null,
+          content: data.content,
+          qdrantId: null,
+          createdAt: new Date().toISOString(),
+        },
         ...prev,
       ]);
       toast.success("已炼化并存入知识库，正在向量化…");
@@ -413,9 +520,14 @@ export function KnowledgeBaseEditor({
             <div key={chunk.id} className="rounded-lg border border-border bg-muted/30">
               <div className="flex items-center gap-2 px-3 py-2.5">
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-muted-foreground">
-                    知识块 {idx + 1}
-                  </p>
+                  <InlineTitle
+                    chunk={chunk}
+                    idx={idx}
+                    kbId={kbId}
+                    onSaved={(chunkId, title) =>
+                      setChunks((prev) => prev.map((c) => (c.id === chunkId ? { ...c, title } : c)))
+                    }
+                  />
                   <div className="mt-1 flex items-center gap-2">
                     <span className="text-xs text-muted-foreground/60">
                       {formatDistanceToNow(new Date(chunk.createdAt), {

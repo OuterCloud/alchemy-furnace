@@ -51,10 +51,12 @@ export async function PUT(request: NextRequest, { params }: RouteContext) {
   }
 
   const { id, chunkId } = await params;
-  const body = (await request.json()) as { content?: string };
+  const body = (await request.json()) as { content?: string; title?: string };
   const content = body.content?.trim();
-  if (!content) {
-    return Response.json({ error: "Content is required" }, { status: 400 });
+  const title = body.title?.trim();
+
+  if (!content && title === undefined) {
+    return Response.json({ error: "content or title is required" }, { status: 400 });
   }
 
   const membership = await db.workspaceMember.findFirst({
@@ -76,20 +78,32 @@ export async function PUT(request: NextRequest, { params }: RouteContext) {
     return Response.json({ error: "Not found" }, { status: 404 });
   }
 
-  if (chunk.qdrantId) {
+  // Only re-embed when content changes
+  if (content && chunk.qdrantId) {
     await deleteChunk(chunk.qdrantId).catch((err: unknown) =>
       console.error("[chunks/put] Qdrant delete failed:", err),
     );
   }
 
+  const updateData: { content?: string; title?: string | null; qdrantId?: null } = {};
+  if (content) {
+    updateData.content = content;
+    updateData.qdrantId = null;
+  }
+  if (title !== undefined) {
+    updateData.title = title || null;
+  }
+
   const updated = await db.knowledgeChunk.update({
     where: { id: chunkId },
-    data: { content, qdrantId: null },
+    data: updateData,
   });
 
-  embedQueue
-    .add("embed-chunk", { chunkId: updated.id, knowledgeBaseId: id })
-    .catch((err: unknown) => console.error("[chunks/put] embed enqueue failed:", err));
+  if (content) {
+    embedQueue
+      .add("embed-chunk", { chunkId: updated.id, knowledgeBaseId: id })
+      .catch((err: unknown) => console.error("[chunks/put] embed enqueue failed:", err));
+  }
 
   return Response.json(updated);
 }

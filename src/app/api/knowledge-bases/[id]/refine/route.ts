@@ -1,15 +1,15 @@
 import type { NextRequest } from "next/server";
 
-import { expandForKnowledgeBase } from "@/lib/ai/knowledge-refiner";
+import { expandForKnowledgeBase, generateChunkTitle } from "@/lib/ai/knowledge-refiner";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { embedQueue } from "@/lib/queue";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
-async function addChunk(knowledgeBaseId: string, content: string) {
+async function addChunk(knowledgeBaseId: string, content: string, title?: string) {
   const chunk = await db.knowledgeChunk.create({
-    data: { knowledgeBaseId, content },
+    data: { knowledgeBaseId, content, title: title || null },
   });
   embedQueue
     .add("embed-chunk", { chunkId: chunk.id, knowledgeBaseId })
@@ -45,8 +45,11 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
     return Response.json({ error: "Content is required" }, { status: 400 });
   }
 
-  const expandedContent = await expandForKnowledgeBase(content);
-  const chunk = await addChunk(id, expandedContent);
+  const [expandedContent, title] = await Promise.all([
+    expandForKnowledgeBase(content),
+    generateChunkTitle(content),
+  ]);
+  const chunk = await addChunk(id, expandedContent, title);
 
-  return Response.json({ chunkId: chunk.id, content: expandedContent }, { status: 201 });
+  return Response.json({ chunkId: chunk.id, content: expandedContent, title }, { status: 201 });
 }

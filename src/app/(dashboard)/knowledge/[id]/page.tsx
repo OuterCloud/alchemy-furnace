@@ -28,7 +28,7 @@ export default async function KnowledgeDetailPage({ params }: { params: Promise<
     include: {
       chunks: {
         orderBy: { createdAt: "desc" },
-        select: { id: true, content: true, qdrantId: true, createdAt: true },
+        select: { id: true, title: true, content: true, qdrantId: true, createdAt: true },
       },
     },
   });

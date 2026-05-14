@@ -218,6 +218,7 @@ model RoleKnowledgeBase {
 model KnowledgeChunk {
   id              String   @id @default(cuid())
   knowledgeBaseId String
+  title           String?
   content         String   @db.LongText
   qdrantId        String?
   createdAt       DateTime @default(now())
