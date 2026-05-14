@@ -10,46 +10,39 @@ export const runtime = "nodejs";
 type RouteContext = { params: Promise<{ id: string }> };
 
 /**
- * Clean up raw PDF-extracted text:
- * - Normalize line endings and collapse whitespace runs
- * - Within each paragraph, join broken lines (PDF renders one line per text item)
- * - Remove spaces between CJK characters (Chinese doesn't use inter-character spaces)
+ * Clean a single PDF page's extracted text:
+ * - Join ALL broken lines into continuous text (PDF.js emits one \n per visual line,
+ *   and sometimes \n\n between text blocks on the same page — both are just layout noise)
+ * - Collapse whitespace runs
+ * - Remove spaces between consecutive CJK characters
  */
-function cleanPdfText(raw: string): string {
+function cleanPageText(raw: string): string {
   return raw
     .replace(/\r\n?/g, "\n")
     .replace(/[ \t]+/g, " ")
-    .split(/\n{2,}/)
-    .map((para) =>
-      para
-        .split("\n")
-        .map((l) => l.trim())
-        .filter(Boolean)
-        .join(" ")
-        // Remove spaces between CJK characters (lookbehind/lookahead preserves surrounding chars)
-        .replace(/(?<=[\u4e00-\u9fff\uff00-\uffef])\s+(?=[\u4e00-\u9fff\uff00-\uffef])/g, ""),
-    )
+    .split("\n")
+    .map((l) => l.trim())
     .filter(Boolean)
-    .join("\n\n");
+    .join(" ")
+    .replace(/(?<=[\u4e00-\u9fff\uff00-\uffef])\s+(?=[\u4e00-\u9fff\uff00-\uffef])/g, "")
+    .trim();
 }
 
-/** Split cleaned PDF text into sections of ~2000 chars, max 20 sections. */
-function splitIntoSections(text: string): string[] {
-  const paragraphs = cleanPdfText(text)
-    .split(/\n{2,}/)
-    .map((p) => p.trim())
-    .filter(Boolean);
-
+/**
+ * Group cleaned page texts into sections of ~2000 chars, max 20 sections.
+ * Grouping by page avoids splitting mid-sentence within a page.
+ */
+function groupPagesIntoSections(pageTexts: string[]): string[] {
   const sections: string[] = [];
   let current = "";
 
-  for (const para of paragraphs) {
+  for (const page of pageTexts) {
     if (sections.length >= 20) break;
-    if (current && current.length + para.length + 2 > 2000) {
+    if (current && current.length + page.length + 1 > 2000) {
       sections.push(current.trim());
-      current = para;
+      current = page;
     } else {
-      current = current ? current + "\n\n" + para : para;
+      current = current ? current + " " + page : page;
     }
   }
 
@@ -57,7 +50,7 @@ function splitIntoSections(text: string): string[] {
     sections.push(current.trim());
   }
 
-  return sections.filter((s) => s.length > 0);
+  return sections.filter(Boolean);
 }
 
 export async function POST(request: NextRequest, { params }: RouteContext) {
@@ -90,21 +83,22 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
 
   const buffer = Buffer.from(await file.arrayBuffer());
 
-  // pdf-parse@2.x is class-based — new PDFParse({ data }) instead of the v1 function API
+  // pdf-parse@2.x is class-based; TextResult has per-page text in .pages[]
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { PDFParse } = require("pdf-parse") as {
     PDFParse: new (opts: { data: Uint8Array }) => {
-      getText(params?: { pageJoiner?: string }): Promise<{ text: string }>;
+      getText(): Promise<{ text: string; pages: Array<{ num: number; text: string }> }>;
       destroy(): Promise<void>;
     };
   };
-  let pdfText: string;
+  let pageTexts: string[];
   const parser = new PDFParse({
     data: new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength),
   });
   try {
-    const result = await parser.getText({ pageJoiner: "\n\n" });
-    pdfText = result.text?.trim() ?? "";
+    const result = await parser.getText();
+    // Clean each page individually, then discard empty pages
+    pageTexts = result.pages.map((p) => cleanPageText(p.text)).filter(Boolean);
   } catch (err) {
     console.error("[kb/upload] pdf parse error:", err);
     return Response.json({ error: "PDF 解析失败，请确认文件未加密且内容为文本" }, { status: 422 });
@@ -112,11 +106,11 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
     await parser.destroy().catch(() => undefined);
   }
 
-  if (!pdfText) {
+  if (pageTexts.length === 0) {
     return Response.json({ error: "PDF 中未提取到文本内容" }, { status: 422 });
   }
 
-  const sections = splitIntoSections(pdfText);
+  const sections = groupPagesIntoSections(pageTexts);
   if (sections.length === 0) {
     return Response.json({ error: "PDF 内容过短，无法提取有效段落" }, { status: 422 });
   }
