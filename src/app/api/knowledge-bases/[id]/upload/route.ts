@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 
-import { expandForKnowledgeBase, generateChunkTitle } from "@/lib/ai/knowledge-refiner";
+import { generateChunkTitle } from "@/lib/ai/knowledge-refiner";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { embedQueue } from "@/lib/queue";
@@ -96,14 +96,12 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
     return Response.json({ error: "PDF 内容过短，无法提取有效段落" }, { status: 422 });
   }
 
-  // Refine each section in parallel (expand + title generation)
+  // PDF text is already complete — skip LLM expansion (saves ~92% tokens).
+  // Only generate titles to help users identify chunks.
   const refined = await Promise.all(
     sections.map(async (section) => {
-      const [content, title] = await Promise.all([
-        expandForKnowledgeBase(section),
-        generateChunkTitle(section),
-      ]);
-      return { content, title };
+      const title = await generateChunkTitle(section);
+      return { content: section, title };
     }),
   );
 
