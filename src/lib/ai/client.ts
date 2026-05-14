@@ -2,7 +2,8 @@ import { env } from "@/env";
 import OpenAI from "openai";
 
 /**
- * OpenAI-compatible client pointing to the internal LLM bridge.
+ * OpenAI-compatible LLM client.
+ * Supports any OpenAI-compatible endpoint (OpenAI, Groq, Azure OpenAI, Ollama, etc.).
  * Use this singleton for all LLM interactions in the application.
  */
 export const llm = new OpenAI({

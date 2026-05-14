@@ -82,9 +82,9 @@
 
 ---
 
-## 3. Roles 模块（角色）
+## 4. Roles 模块（角色）
 
-### 3.1 产品定位
+### 4.1 产品定位
 
 Role（角色）是可部署的 AI 对话 Agent：
 - 定义身份（systemPrompt）：描述「是谁、如何思考、如何回答」
@@ -93,7 +93,7 @@ Role（角色）是可部署的 AI 对话 Agent：
 
 ---
 
-### 3.2 角色列表页 `/roles`
+### 4.2 角色列表页 `/roles`
 
 **UI 逻辑（Server Component）：**
 - 查询当前 workspace 下所有角色（`createdAt` 倒序）
@@ -114,7 +114,7 @@ Role（角色）是可部署的 AI 对话 Agent：
 
 ---
 
-### 3.3 新建角色 `/roles/new`
+### 4.3 新建角色 `/roles/new`
 
 **UI 逻辑：**
 - Server Component 壳 + `CreateRoleForm` 客户端组件
@@ -126,7 +126,7 @@ Role（角色）是可部署的 AI 对话 Agent：
 
 ---
 
-### 3.4 角色详情/编辑页 `/roles/[id]`
+### 4.4 角色详情/编辑页 `/roles/[id]`
 
 **UI 逻辑：**
 - Server Component 获取角色数据、已挂载 KB 列表、workspace 全部 KB 后，渲染 `RoleEditor` 客户端组件
@@ -151,7 +151,7 @@ Role（角色）是可部署的 AI 对话 Agent：
 
 ---
 
-### 3.5 挂载知识库
+### 4.5 挂载知识库
 
 **触发：** 点击 RoleEditor 内「挂载知识库」按钮，Dialog 弹出 workspace 内可挂载的 KB 列表（已挂载的不显示）
 
@@ -170,7 +170,7 @@ Role（角色）是可部署的 AI 对话 Agent：
 
 ---
 
-### 3.6 状态流转机制
+### 4.6 状态流转机制
 
 状态代表「可见性」，与角色编辑解耦。规则与原 Skills 模块一致：
 
@@ -194,14 +194,14 @@ Role（角色）是可部署的 AI 对话 Agent：
 
 ---
 
-### 3.7 删除角色
+### 4.7 删除角色
 
 **权限：** 仅 OWNER / ADMIN 可删除
 **流程：** Dialog 二次确认 → `DELETE /api/roles/[id]` → 跳转 `/roles`
 
 ---
 
-### 3.9 允许向用户索取数据（阶段 0 数据源）
+### 4.8 允许向用户索取数据（阶段 0 数据源）
 
 **字段：** `Role.allowDataRequest: Boolean`（默认 `false`）
 
@@ -221,7 +221,7 @@ Role（角色）是可部署的 AI 对话 Agent：
 
 ---
 
-### 3.8 API 权限矩阵
+### 4.9 API 权限矩阵
 
 | 接口 | 方法 | 所需角色 | 说明 |
 |------|------|----------|------|
@@ -236,9 +236,9 @@ Role（角色）是可部署的 AI 对话 Agent：
 
 ---
 
-## 4. 知识库模块
+## 5. 知识库模块
 
-### 4.1 产品定位
+### 5.1 产品定位
 
 KnowledgeBase（知识库）是 workspace 级独立知识存储单元：
 - 不依附于任何角色，可被多个角色复用
@@ -247,7 +247,7 @@ KnowledgeBase（知识库）是 workspace 级独立知识存储单元：
 
 ---
 
-### 4.2 知识库列表页 `/knowledge`
+### 5.2 知识库列表页 `/knowledge`
 
 **UI 逻辑：**
 - Server Component，fetch workspace 下所有 KB（含 chunk 数量）
@@ -256,7 +256,7 @@ KnowledgeBase（知识库）是 workspace 级独立知识存储单元：
 
 ---
 
-### 4.3 新建知识库 `/knowledge/new`
+### 5.3 新建知识库 `/knowledge/new`
 
 **UI 逻辑：**
 - 纯客户端页面（Client Component）
@@ -265,7 +265,7 @@ KnowledgeBase（知识库）是 workspace 级独立知识存储单元：
 
 ---
 
-### 4.4 知识库详情页 `/knowledge/[id]`
+### 5.4 知识库详情页 `/knowledge/[id]`
 
 **UI 逻辑：**
 - Server Component 获取 KB 及所有 chunks，渲染 `KnowledgeBaseEditor` 客户端组件
@@ -287,7 +287,7 @@ KnowledgeBase（知识库）是 workspace 级独立知识存储单元：
 
 ---
 
-### 4.5 知识块 AI 优化
+### 5.5 知识块 AI 优化
 
 **触发：** 点击知识块列表中的眼睛图标 → 弹出编辑 Dialog → 底部「AI 优化」区域
 
@@ -301,7 +301,7 @@ KnowledgeBase（知识库）是 workspace 级独立知识存储单元：
 
 ---
 
-### 4.6 知识块手动向量化
+### 5.6 知识块手动向量化
 
 **触发条件：** 知识块 `qdrantId === null`（待向量化状态）时，chunk 行右侧显示 BrainCircuit 图标按钮
 
@@ -315,7 +315,7 @@ KnowledgeBase（知识库）是 workspace 级独立知识存储单元：
 
 ---
 
-### 4.7 炼化流程
+### 5.7 炼化流程
 
 **触发：** 点「炼化并存入知识库」按钮
 
@@ -338,7 +338,7 @@ KnowledgeBase（知识库）是 workspace 级独立知识存储单元：
 
 ---
 
-### 4.8 嵌入模型
+### 5.8 嵌入模型
 
 - 模型：`Xenova/bge-small-zh-v1.5`（约 24MB，CPU-only）
 - 维度：512，余弦相似度
@@ -347,13 +347,13 @@ KnowledgeBase（知识库）是 workspace 级独立知识存储单元：
 
 ---
 
-### 4.9 向量搜索
+### 5.9 向量搜索
 
 `searchChunks({ vector, kbIds: string[] })` — 支持跨多个 KB 搜索（`should` filter），通常传入角色当前挂载的所有 KB ID。
 
 ---
 
-### 4.10 API 权限矩阵
+### 5.10 API 权限矩阵
 
 | 接口 | 方法 | 所需角色 | 说明 |
 |------|------|----------|------|
@@ -370,9 +370,9 @@ KnowledgeBase（知识库）是 workspace 级独立知识存储单元：
 
 ---
 
-## 5. 对话模块
+## 6. 对话模块
 
-### 5.1 产品定位
+### 6.1 产品定位
 
 对话模块允许用户与已发布的 Role 进行实时对话：
 - 仅 **PUBLISHED** 状态的角色可以发起对话，入口在角色卡片上
@@ -382,7 +382,7 @@ KnowledgeBase（知识库）是 workspace 级独立知识存储单元：
 
 ---
 
-### 5.2 对话入口（角色卡片）
+### 6.2 对话入口（角色卡片）
 
 没有独立的对话列表页面，对话从角色列表页 `/roles` 发起。
 
@@ -395,7 +395,7 @@ KnowledgeBase（知识库）是 workspace 级独立知识存储单元：
 
 ---
 
-### 5.3 聊天页面 `/conversations/[conversationId]`
+### 6.3 聊天页面 `/conversations/[conversationId]`
 
 **Server Component 职责：**
 - 验证 `conversation.userId === session.user.id`（所有权校验，不同用户互不可见）
@@ -419,7 +419,7 @@ KnowledgeBase（知识库）是 workspace 级独立知识存储单元：
 
 ---
 
-### 5.4 历史对话 Sheet
+### 6.4 历史对话 Sheet
 
 **触发：** 点击顶部 History 图标，左侧 Sheet 弹出
 
@@ -446,7 +446,7 @@ KnowledgeBase（知识库）是 workspace 级独立知识存储单元：
 
 ---
 
-### 5.5 流式消息发送（SSE）
+### 6.5 流式消息发送（SSE）
 
 **输入区支持：**
 - 文字输入：Textarea，Enter 发送，Shift+Enter 换行
@@ -465,7 +465,7 @@ KnowledgeBase（知识库）是 workspace 级独立知识存储单元：
 
 ---
 
-### 5.6 图片消息支持
+### 6.6 图片消息支持
 
 **DB 字段：** `Message.imageUrls String? @db.LongText`，存储 base64 data URL 的 JSON 数组（`null` 表示无图片）
 
@@ -489,11 +489,11 @@ KnowledgeBase（知识库）是 workspace 级独立知识存储单元：
 ```
 仅当前消息包含图片，历史消息仍以纯文本传递给 LLM（简化处理，避免重复传输大体积 base64）。
 
-**前提：** LLM bridge 必须使用多模态模型（如 gpt-4o），否则图片内容会被忽略。
+**前提：** 配置的 LLM 必须使用支持多模态（vision）的模型（如 gpt-4o），否则图片内容会被忽略。
 
 ---
 
-### 5.7 `POST /api/conversations/[id]/messages` 核心逻辑
+### 6.7 `POST /api/conversations/[id]/messages` 核心逻辑
 
 **请求体：** `{ content?: string, images?: string[] }`，content 和 images 至少提供一个。
 
@@ -517,7 +517,7 @@ KnowledgeBase（知识库）是 workspace 级独立知识存储单元：
 
 ---
 
-### 5.8 API 权限矩阵
+### 6.8 API 权限矩阵
 
 | 接口 | 方法 | 所需权限 | 说明 |
 |------|------|----------|------|
