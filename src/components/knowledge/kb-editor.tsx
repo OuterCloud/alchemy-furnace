@@ -7,6 +7,7 @@ import { zhCN } from "date-fns/locale";
 import {
   BrainCircuit,
   Eye,
+  FileText,
   Loader2,
   Pencil,
   RefreshCw,
@@ -308,6 +309,9 @@ export function KnowledgeBaseEditor({
   const [embeddingChunkId, setEmbeddingChunkId] = useState<string | null>(null);
   const [reembedding, setReembedding] = useState(false);
   const [deletingKB, setDeletingKB] = useState(false);
+  const [uploadingPdf, setUploadingPdf] = useState(false);
+  const [uploadFileName, setUploadFileName] = useState<string | null>(null);
+  const pdfInputRef = useRef<HTMLInputElement>(null);
 
   const handleSave = async () => {
     if (!name.trim()) {
@@ -424,6 +428,35 @@ export function KnowledgeBaseEditor({
     }
   };
 
+  const handlePdfUpload = async (file: File) => {
+    setUploadFileName(file.name);
+    setUploadingPdf(true);
+    const formData = new FormData();
+    formData.append("file", file);
+    try {
+      const res = await fetch(`/api/knowledge-bases/${kbId}/upload`, {
+        method: "POST",
+        body: formData,
+      });
+      if (!res.ok) {
+        const err = (await res.json()) as { error?: string };
+        throw new Error(err.error ?? "上传失败");
+      }
+      const data = (await res.json()) as {
+        count: number;
+        chunks: Chunk[];
+      };
+      setChunks((prev) => [...data.chunks, ...prev]);
+      toast.success(`已从 PDF 提取 ${data.count} 个知识块，正在向量化…`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "上传失败，请重试");
+    } finally {
+      setUploadingPdf(false);
+      setUploadFileName(null);
+      if (pdfInputRef.current) pdfInputRef.current.value = "";
+    }
+  };
+
   return (
     <div className="flex flex-col gap-6">
       {/* ── Basic fields ── */}
@@ -490,6 +523,49 @@ export function KnowledgeBaseEditor({
               </>
             )}
           </Button>
+
+          {/* PDF upload divider */}
+          <div className="flex items-center gap-3">
+            <div className="h-px flex-1 bg-border" />
+            <span className="text-xs text-muted-foreground">或</span>
+            <div className="h-px flex-1 bg-border" />
+          </div>
+
+          {/* PDF upload button */}
+          <input
+            ref={pdfInputRef}
+            type="file"
+            accept=".pdf"
+            className="hidden"
+            disabled={uploadingPdf}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) handlePdfUpload(file);
+            }}
+          />
+          <Button
+            variant="outline"
+            onClick={() => pdfInputRef.current?.click()}
+            disabled={uploadingPdf || refining}
+            className="w-full"
+          >
+            {uploadingPdf ? (
+              <>
+                <Loader2 className="animate-spin" />
+                {uploadFileName ? `正在处理「${uploadFileName}」…` : "处理中…"}
+              </>
+            ) : (
+              <>
+                <FileText />
+                上传 PDF 文件炼化
+              </>
+            )}
+          </Button>
+          {uploadingPdf && (
+            <p className="text-center text-xs text-muted-foreground">
+              正在提取文本并逐段 AI 炼化，PDF 较大时需要一些时间…
+            </p>
+          )}
         </div>
       </div>
 

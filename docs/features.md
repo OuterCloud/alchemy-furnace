@@ -317,18 +317,42 @@ KnowledgeBase（知识库）是 workspace 级独立知识存储单元：
 
 ### 5.7 炼化流程
 
+#### 5.7.1 文字输入炼化
+
 **触发：** 点「炼化并存入知识库」按钮
 
 **服务端处理（`POST /api/knowledge-bases/[id]/refine`）：**
-1. 调用 `expandForKnowledgeBase(content)` — LLM 将原始输入整理为结构化知识内容
+1. 并行调用 `expandForKnowledgeBase(content)` + `generateChunkTitle(content)` — LLM 整理为结构化知识内容，并自动生成标题（≤15字）
 2. 同步写入 `KnowledgeChunk`（`qdrantId = null`）
 3. 将 chunk 加入 `embed` BullMQ 队列
-4. 返回 `{ chunkId, content }`
+4. 返回 `{ chunkId, content, title }`
 
 **前端处理：**
 - 清空输入框
 - 乐观更新：在列表头部插入新 chunk（状态「待向量化」）
 - toast 提示「已炼化并存入知识库，正在向量化…」
+
+#### 5.7.2 PDF 文件上传炼化
+
+**触发：** 点「上传 PDF 文件炼化」按钮，选择 .pdf 文件
+
+**服务端处理（`POST /api/knowledge-bases/[id]/upload`，Node.js runtime）：**
+1. 接收 multipart/form-data，提取 `file` 字段
+2. 使用 `pdf-parse` 库解析 PDF，提取纯文本（仅支持文本型 PDF，不支持扫描版）
+3. 按双换行符拆分为段落，累积至 ~2000 字/段，最多 20 段
+4. 对每段并行调用 `expandForKnowledgeBase` + `generateChunkTitle`
+5. 批量创建 `KnowledgeChunk` 记录，逐个加入 `embed` 队列
+6. 返回 `{ count, chunks[] }`
+
+**前端处理：**
+- 上传期间按钮显示「正在处理「{文件名}」…」及提示文字
+- 成功后在列表头部批量插入所有新 chunk
+- toast 提示「已从 PDF 提取 N 个知识块，正在向量化…」
+
+**限制：**
+- 最多提取 20 段（超出部分自动截断）
+- 仅支持文本型 PDF（非扫描图像 PDF）
+- 单次上传处理时间与 PDF 长度及段数成正比
 
 **知识块生命周期：**
 1. **保存**：refine API 同步创建 chunk（`qdrantId = null`）
@@ -362,10 +386,11 @@ KnowledgeBase（知识库）是 workspace 级独立知识存储单元：
 | `/api/knowledge-bases/[id]` | GET | 任意成员 | 获取 KB 详情 |
 | `/api/knowledge-bases/[id]` | PUT | 任意成员 | 更新 KB 名称/描述 |
 | `/api/knowledge-bases/[id]` | DELETE | 任意成员 | 删除 KB（含 Qdrant 向量）|
-| `/api/knowledge-bases/[id]/refine` | POST | 任意成员 | 炼化输入内容为知识块 |
+| `/api/knowledge-bases/[id]/refine` | POST | 任意成员 | 文字输入炼化为知识块 |
+| `/api/knowledge-bases/[id]/upload` | POST | 任意成员 | PDF 文件上传并批量炼化 |
 | `/api/knowledge-bases/[id]/chunks` | GET | 任意成员 | 列出 KB 下所有 chunks |
 | `/api/knowledge-bases/[id]/chunks/[cid]` | DELETE | 任意成员 | 删除单个 chunk（含 Qdrant）|
-| `/api/knowledge-bases/[id]/chunks/[cid]` | PUT | 任意成员 | 更新 chunk 内容（重新向量化）|
+| `/api/knowledge-bases/[id]/chunks/[cid]` | PUT | 任意成员 | 更新 chunk 内容/标题（内容变更时重新向量化）|
 | `/api/knowledge-bases/[id]/reembed` | POST | 任意成员 | 重新触发待向量化 chunks 的嵌入 |
 
 ---
