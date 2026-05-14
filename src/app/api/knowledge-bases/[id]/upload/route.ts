@@ -29,20 +29,23 @@ function cleanPageText(raw: string): string {
 }
 
 /**
- * Group cleaned page texts into sections of ~2000 chars, max 20 sections.
- * Grouping by page avoids splitting mid-sentence within a page.
+ * Split full text into sections of ~1800 chars at sentence boundaries (。！？…).
+ * Splitting after sentence-ending punctuation avoids mid-sentence truncation
+ * regardless of PDF page layout. Max 20 sections.
  */
-function groupPagesIntoSections(pageTexts: string[]): string[] {
+function splitBySentences(fullText: string): string[] {
+  // Split after each sentence-ending mark, keeping the mark with the preceding sentence
+  const sentences = fullText.split(/(?<=[。！？…]+)/).filter(Boolean);
   const sections: string[] = [];
   let current = "";
 
-  for (const page of pageTexts) {
+  for (const sentence of sentences) {
     if (sections.length >= 20) break;
-    if (current && current.length + page.length + 1 > 2000) {
+    if (current && current.length + sentence.length > 1800) {
       sections.push(current.trim());
-      current = page;
+      current = sentence;
     } else {
-      current = current ? current + " " + page : page;
+      current = current + sentence;
     }
   }
 
@@ -110,7 +113,8 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
     return Response.json({ error: "PDF 中未提取到文本内容" }, { status: 422 });
   }
 
-  const sections = groupPagesIntoSections(pageTexts);
+  // Join all page texts then split at sentence boundaries
+  const sections = splitBySentences(pageTexts.join(" "));
   if (sections.length === 0) {
     return Response.json({ error: "PDF 内容过短，无法提取有效段落" }, { status: 422 });
   }
