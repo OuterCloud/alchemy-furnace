@@ -48,7 +48,9 @@ export default async function KnowledgeDetailPage({ params }: { params: Promise<
         </Button>
         <div>
           <h1 className="text-2xl font-semibold">{kb.name}</h1>
-          {kb.description && <p className="mt-1 text-sm text-muted-foreground">{kb.description}</p>}
+          {kb.description && (
+            <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">{kb.description}</p>
+          )}
         </div>
       </div>
 
