@@ -117,7 +117,7 @@ function ChunkEditDialog({
       >
         <Eye className="h-3.5 w-3.5" />
       </DialogTrigger>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-h-[85vh] max-w-2xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{displayTitle}</DialogTitle>
           <DialogDescription>
@@ -130,7 +130,7 @@ function ChunkEditDialog({
         <Textarea
           value={editContent}
           onChange={(e) => setEditContent(e.target.value)}
-          className="min-h-[35vh] font-mono text-sm"
+          className="max-h-[40vh] min-h-[150px] resize-none font-mono text-sm"
           disabled={isBusy}
         />
 
