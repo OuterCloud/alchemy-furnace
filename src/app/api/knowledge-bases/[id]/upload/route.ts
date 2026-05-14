@@ -66,15 +66,25 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
 
   const buffer = Buffer.from(await file.arrayBuffer());
 
-  // pdf-parse is CommonJS — must require()
+  // pdf-parse@2.x is class-based — new PDFParse({ data }) instead of the v1 function API
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const pdfParse = require("pdf-parse") as (buf: Buffer) => Promise<{ text: string }>;
+  const { PDFParse } = require("pdf-parse") as {
+    PDFParse: new (opts: { data: Uint8Array }) => {
+      getText(params?: { pageJoiner?: string }): Promise<{ text: string }>;
+      destroy(): Promise<void>;
+    };
+  };
   let pdfText: string;
+  const parser = new PDFParse({
+    data: new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength),
+  });
   try {
-    const result = await pdfParse(buffer);
+    const result = await parser.getText({ pageJoiner: "\n\n" });
     pdfText = result.text?.trim() ?? "";
   } catch {
     return Response.json({ error: "PDF 解析失败，请确认文件未加密且内容为文本" }, { status: 422 });
+  } finally {
+    await parser.destroy().catch(() => undefined);
   }
 
   if (!pdfText) {
