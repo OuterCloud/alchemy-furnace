@@ -39,7 +39,7 @@ interface ChatWindowProps {
 
 function MarkdownContent({ content }: { content: string }) {
   return (
-    <div className="[&_*]:break-words">
+    <div className="w-full [&_*]:break-words">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
