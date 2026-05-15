@@ -39,62 +39,64 @@ interface ChatWindowProps {
 
 function MarkdownContent({ content }: { content: string }) {
   return (
-    <ReactMarkdown
-      remarkPlugins={[remarkGfm]}
-      components={{
-        p: ({ children }) => <p className="mb-2 leading-relaxed last:mb-0">{children}</p>,
-        strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
-        em: ({ children }) => <em className="italic">{children}</em>,
-        h1: ({ children }) => (
-          <h1 className="mt-3 mb-2 text-base font-bold first:mt-0">{children}</h1>
-        ),
-        h2: ({ children }) => (
-          <h2 className="mt-3 mb-2 text-sm font-bold first:mt-0">{children}</h2>
-        ),
-        h3: ({ children }) => (
-          <h3 className="mt-2 mb-1 text-sm font-semibold first:mt-0">{children}</h3>
-        ),
-        ul: ({ children }) => (
-          <ul className="mb-2 ml-4 list-disc space-y-0.5 last:mb-0">{children}</ul>
-        ),
-        ol: ({ children }) => (
-          <ol className="mb-2 ml-4 list-decimal space-y-0.5 last:mb-0">{children}</ol>
-        ),
-        li: ({ children }) => <li className="leading-relaxed">{children}</li>,
-        code: ({ children, className }) => {
-          const isBlock = className?.startsWith("language-");
-          if (isBlock) {
+    <div className="break-words">
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          p: ({ children }) => <p className="mb-2 leading-relaxed last:mb-0">{children}</p>,
+          strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+          em: ({ children }) => <em className="italic">{children}</em>,
+          h1: ({ children }) => (
+            <h1 className="mt-3 mb-2 text-base font-bold first:mt-0">{children}</h1>
+          ),
+          h2: ({ children }) => (
+            <h2 className="mt-3 mb-2 text-sm font-bold first:mt-0">{children}</h2>
+          ),
+          h3: ({ children }) => (
+            <h3 className="mt-2 mb-1 text-sm font-semibold first:mt-0">{children}</h3>
+          ),
+          ul: ({ children }) => (
+            <ul className="mb-2 ml-4 list-disc space-y-0.5 last:mb-0">{children}</ul>
+          ),
+          ol: ({ children }) => (
+            <ol className="mb-2 ml-4 list-decimal space-y-0.5 last:mb-0">{children}</ol>
+          ),
+          li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+          code: ({ children, className }) => {
+            const isBlock = className?.startsWith("language-");
+            if (isBlock) {
+              return (
+                <code className="block overflow-x-auto rounded bg-black/20 px-3 py-2 font-mono text-xs">
+                  {children}
+                </code>
+              );
+            }
             return (
-              <code className="block overflow-x-auto rounded bg-black/20 px-3 py-2 font-mono text-xs">
-                {children}
-              </code>
+              <code className="rounded bg-black/20 px-1 py-0.5 font-mono text-xs">{children}</code>
             );
-          }
-          return (
-            <code className="rounded bg-black/20 px-1 py-0.5 font-mono text-xs">{children}</code>
-          );
-        },
-        pre: ({ children }) => <pre className="mt-1 mb-2 last:mb-0">{children}</pre>,
-        blockquote: ({ children }) => (
-          <blockquote className="mb-2 border-l-2 border-current pl-3 opacity-70 last:mb-0">
-            {children}
-          </blockquote>
-        ),
-        hr: () => <hr className="my-2 border-current opacity-20" />,
-        a: ({ href, children }) => (
-          <a
-            href={href}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="underline underline-offset-2 opacity-80 hover:opacity-100"
-          >
-            {children}
-          </a>
-        ),
-      }}
-    >
-      {content}
-    </ReactMarkdown>
+          },
+          pre: ({ children }) => <pre className="mt-1 mb-2 last:mb-0">{children}</pre>,
+          blockquote: ({ children }) => (
+            <blockquote className="mb-2 border-l-2 border-current pl-3 opacity-70 last:mb-0">
+              {children}
+            </blockquote>
+          ),
+          hr: () => <hr className="my-2 border-current opacity-20" />,
+          a: ({ href, children }) => (
+            <a
+              href={href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline underline-offset-2 opacity-80 hover:opacity-100"
+            >
+              {children}
+            </a>
+          ),
+        }}
+      >
+        {content}
+      </ReactMarkdown>
+    </div>
   );
 }
 
@@ -499,7 +501,7 @@ export function ChatWindow({
               className={`flex ${msg.role === "USER" ? "justify-end" : "justify-start"}`}
             >
               <div
-                className={`max-w-[75%] rounded-2xl px-4 py-2.5 text-sm ${
+                className={`max-w-[75%] min-w-0 overflow-hidden rounded-2xl px-4 py-2.5 text-sm ${
                   msg.role === "USER"
                     ? "bg-primary text-primary-foreground"
                     : "bg-muted text-foreground"
@@ -535,7 +537,7 @@ export function ChatWindow({
           {/* Streaming assistant bubble */}
           {isStreaming && (
             <div className="flex justify-start">
-              <div className="max-w-[75%] rounded-2xl bg-muted px-4 py-2.5 text-sm text-foreground">
+              <div className="max-w-[75%] min-w-0 overflow-hidden rounded-2xl bg-muted px-4 py-2.5 text-sm text-foreground">
                 {toolCallName ? (
                   <span className="animate-pulse text-muted-foreground">
                     正在调用「{toolCallName}」…
