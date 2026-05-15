@@ -39,7 +39,7 @@ interface ChatWindowProps {
 
 function MarkdownContent({ content }: { content: string }) {
   return (
-    <div className="break-words">
+    <div className="max-w-full min-w-0 break-words">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
@@ -501,7 +501,7 @@ export function ChatWindow({
               className={`flex ${msg.role === "USER" ? "justify-end" : "justify-start"}`}
             >
               <div
-                className={`max-w-[75%] min-w-0 overflow-hidden rounded-2xl px-4 py-2.5 text-sm ${
+                className={`max-w-[75%] min-w-0 rounded-2xl px-4 py-2.5 text-sm ${
                   msg.role === "USER"
                     ? "bg-primary text-primary-foreground"
                     : "bg-muted text-foreground"
@@ -537,7 +537,7 @@ export function ChatWindow({
           {/* Streaming assistant bubble */}
           {isStreaming && (
             <div className="flex justify-start">
-              <div className="max-w-[75%] min-w-0 overflow-hidden rounded-2xl bg-muted px-4 py-2.5 text-sm text-foreground">
+              <div className="max-w-[75%] min-w-0 rounded-2xl bg-muted px-4 py-2.5 text-sm text-foreground">
                 {toolCallName ? (
                   <span className="animate-pulse text-muted-foreground">
                     正在调用「{toolCallName}」…
