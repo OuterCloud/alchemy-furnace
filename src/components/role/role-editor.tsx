@@ -236,13 +236,13 @@ function AttachKBDialog({
             </div>
           </div>
         ) : (
-          <div className="flex flex-col gap-2">
+          <div className="flex min-w-0 flex-col gap-2">
             {unattached.map((kb) => (
               <div
                 key={kb.id}
-                className="flex items-center justify-between rounded-lg border border-border p-3"
+                className="flex min-w-0 items-center gap-3 rounded-lg border border-border p-3"
               >
-                <div className="min-w-0">
+                <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">{kb.name}</p>
                   {kb.description && (
                     <p className="truncate text-xs text-muted-foreground">{kb.description}</p>
@@ -253,7 +253,7 @@ function AttachKBDialog({
                   size="sm"
                   onClick={() => handleAttach(kb.id)}
                   disabled={attaching === kb.id}
-                  className="ml-3 shrink-0"
+                  className="shrink-0"
                 >
                   {attaching === kb.id ? <Loader2 className="animate-spin" /> : <Link2 />}
                   挂载
@@ -345,20 +345,20 @@ function AttachDSDialog({
             </div>
           </div>
         ) : (
-          <div className="flex flex-col gap-2">
+          <div className="flex min-w-0 flex-col gap-2">
             {unattached.map((ds) => (
               <div
                 key={ds.id}
-                className="flex items-center justify-between rounded-lg border border-border p-3"
+                className="flex min-w-0 items-center gap-3 rounded-lg border border-border p-3"
               >
-                <div className="min-w-0">
-                  <div className="flex items-center gap-1.5">
+                <div className="min-w-0 flex-1">
+                  <div className="flex min-w-0 items-center gap-1.5">
                     <span
                       className={`shrink-0 rounded px-1.5 py-0.5 font-mono text-xs font-semibold ${METHOD_COLORS[ds.method] ?? "bg-muted text-muted-foreground"}`}
                     >
                       {ds.method}
                     </span>
-                    <p className="truncate text-sm font-medium">{ds.name}</p>
+                    <p className="min-w-0 flex-1 truncate text-sm font-medium">{ds.name}</p>
                   </div>
                   {ds.description && (
                     <p className="mt-0.5 truncate text-xs text-muted-foreground">
@@ -370,7 +370,7 @@ function AttachDSDialog({
                   size="sm"
                   onClick={() => handleAttach(ds.id)}
                   disabled={attaching === ds.id}
-                  className="ml-3 shrink-0"
+                  className="shrink-0"
                 >
                   {attaching === ds.id ? <Loader2 className="animate-spin" /> : <Link2 />}
                   绑定

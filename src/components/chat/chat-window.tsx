@@ -39,7 +39,7 @@ interface ChatWindowProps {
 
 function MarkdownContent({ content }: { content: string }) {
   return (
-    <div className="w-full [&_*]:break-words">
+    <div className="w-full">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
@@ -75,7 +75,11 @@ function MarkdownContent({ content }: { content: string }) {
               <code className="rounded bg-black/20 px-1 py-0.5 font-mono text-xs">{children}</code>
             );
           },
-          pre: ({ children }) => <pre className="mt-1 mb-2 last:mb-0">{children}</pre>,
+          pre: ({ children }) => (
+            <pre className="mt-1 mb-2 max-w-full overflow-x-auto whitespace-pre-wrap last:mb-0">
+              {children}
+            </pre>
+          ),
           blockquote: ({ children }) => (
             <blockquote className="mb-2 border-l-2 border-current pl-3 opacity-70 last:mb-0">
               {children}
@@ -487,7 +491,7 @@ export function ChatWindow({
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-4 py-4">
+      <div className="flex-1 overflow-x-hidden overflow-y-auto px-4 py-4">
         <div className="mx-auto flex max-w-2xl flex-col gap-4">
           {messages.length === 0 && !isStreaming && (
             <div className="py-12 text-center text-sm text-muted-foreground">
@@ -506,6 +510,7 @@ export function ChatWindow({
                     ? "bg-primary text-primary-foreground"
                     : "bg-muted text-foreground"
                 }`}
+                style={{ overflowWrap: "anywhere" }}
               >
                 {msg.role === "USER" ? (
                   <>
@@ -537,7 +542,10 @@ export function ChatWindow({
           {/* Streaming assistant bubble */}
           {isStreaming && (
             <div className="flex justify-start">
-              <div className="max-w-[75%] min-w-0 overflow-hidden rounded-2xl bg-muted px-4 py-2.5 text-sm text-foreground">
+              <div
+                className="max-w-[75%] min-w-0 overflow-hidden rounded-2xl bg-muted px-4 py-2.5 text-sm text-foreground"
+                style={{ overflowWrap: "anywhere" }}
+              >
                 {toolCallName ? (
                   <span className="animate-pulse text-muted-foreground">
                     正在调用「{toolCallName}」…
